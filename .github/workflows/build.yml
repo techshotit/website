@@ -1,4 +1,4 @@
-name: Build Samsung RTL8192EU Kernel Fixed
+name: Build RTL8192EU Kernel Module Only
 
 on:
   workflow_dispatch:
@@ -8,24 +8,21 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Install Build Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt update -qq
-          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu
 
-      - name: Clone Kernel Source
+      - name: Clone Kernel Source & RTL8192EU
         run: |
           git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
-
-      - name: Inject RTL8192EU Driver (Built-in)
-        run: |
           cd source/drivers/net/wireless
           git clone https://github.com/clnhub/rtl8192eu-linux.git rtl8192eu
-          echo "obj-y += rtl8192eu/" >> Makefile
+          echo "obj-m += rtl8192eu/" >> Makefile
           sed -i 's/---help---/help/g' rtl8192eu/Kconfig
           sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
 
-      - name: Compile Kernel & DTB
+      - name: Build Standalone .ko Module
         run: |
           cd source
           export ARCH=arm64
@@ -35,30 +32,15 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export LLVM=1
           export LLVM_IAS=1
+          export KCFLAGS="-Wno-error"
 
           make m14x_defconfig
-          
-          # Enable RTL8192EU as built-in (=y)
-          echo "CONFIG_RTL8192EU=y" >> .config
-          echo "CONFIG_WIRELESS=y" >> .config
-          echo "CONFIG_CFG80211=y" >> .config
-          echo "CONFIG_MAC80211=y" >> .config
-          
-          # CRITICAL: Keep MODVERSIONS enabled so Samsung vendor modules load
-          sed -i 's/CONFIG_MODVERSIONS=n/CONFIG_MODVERSIONS=y/' .config
-          sed -i 's/CONFIG_TRIM_UNUSED_KSYMS=y/CONFIG_TRIM_UNUSED_KSYMS=n/' .config
+          scripts/config --module CONFIG_RTL8192EU
+          make modules_prepare
+          make -j$(nproc) M=drivers/net/wireless/rtl8192eu modules
 
-          # Build Image and Device Tree Blobs (dtb)
-          make -j$(nproc) Image dtbs
-
-      - name: Package Artifacts
-        run: |
-          mkdir -p output
-          cp source/arch/arm64/boot/Image output/Image
-          find source/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} output/ \; 2>/dev/null || true
-
-      - name: Upload Kernel Artifact
+      - name: Upload Module Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fixed-kernel
-          path: output/
+          name: rtl8192eu-module
+          path: source/drivers/net/wireless/rtl8192eu/8192eu.ko
