@@ -11,7 +11,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt update -qq
-          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu
+          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu dwarves
 
       - name: Clone Kernel Source
         run: |
@@ -37,6 +37,9 @@ jobs:
           export LLVM_IAS=1
 
           make m14x_defconfig
+
+          # Disable BTF debugging and strict module requirements
+          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/' .config
           sed -i 's/CONFIG_MODVERSIONS=y/CONFIG_MODVERSIONS=n/' .config
           sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/' .config
           sed -i 's/CONFIG_MODULE_SIG_ALL=y/CONFIG_MODULE_SIG_ALL=n/' .config
