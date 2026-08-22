@@ -13,11 +13,12 @@ jobs:
           sudo apt update -qq
           sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu
 
-      - name: Clone Source & Driver
+      - name: Clone Kernel & Modern Driver Source
         run: |
           git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
           cd source/drivers/net/wireless
-          git clone https://github.com/clnhub/rtl8192eu-linux.git rtl8192eu
+          # Use morrownr branch updated specifically for Linux 5.10/5.15+
+          git clone --depth=1 https://github.com/morrownr/8192eu-linux-gnu.git rtl8192eu
           echo "obj-m += rtl8192eu/" >> Makefile
           sed -i 's/---help---/help/g' rtl8192eu/Kconfig
           sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
@@ -39,7 +40,7 @@ jobs:
           make modules_prepare
           make -j$(nproc) M=drivers/net/wireless/rtl8192eu modules
 
-      - name: Upload Finished Driver
+      - name: Upload Driver
         uses: actions/upload-artifact@v4
         with:
           name: rtl8192eu-module
