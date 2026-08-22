@@ -1,4 +1,4 @@
-name: Build RTL8192EU Kernel Module Only
+name: Build RTL8192EU Kernel Module
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Install Dependencies
+      - name: Install Build Tools
         run: |
           sudo apt update -qq
           sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu
 
-      - name: Clone Kernel Source & RTL8192EU
+      - name: Clone Source & Driver
         run: |
           git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
           cd source/drivers/net/wireless
@@ -22,7 +22,7 @@ jobs:
           sed -i 's/---help---/help/g' rtl8192eu/Kconfig
           sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
 
-      - name: Build Standalone .ko Module
+      - name: Build Standalone Module
         run: |
           cd source
           export ARCH=arm64
@@ -39,7 +39,7 @@ jobs:
           make modules_prepare
           make -j$(nproc) M=drivers/net/wireless/rtl8192eu modules
 
-      - name: Upload Module Artifact
+      - name: Upload Finished Driver
         uses: actions/upload-artifact@v4
         with:
           name: rtl8192eu-module
