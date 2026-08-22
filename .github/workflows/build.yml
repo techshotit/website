@@ -1,23 +1,23 @@
-name: Build Samsung RTL8192EU Kernel
+name: Build Samsung RTL8192EU Kernel Fixed
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Install Build Dependencies
         run: |
           sudo apt update -qq
-          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu dwarves
+          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Clone Kernel Source
         run: |
           git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
 
-      - name: Inject RTL8192EU Driver
+      - name: Inject RTL8192EU Driver (Built-in)
         run: |
           cd source/drivers/net/wireless
           git clone https://github.com/clnhub/rtl8192eu-linux.git rtl8192eu
@@ -25,7 +25,7 @@ jobs:
           sed -i 's/---help---/help/g' rtl8192eu/Kconfig
           sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
 
-      - name: Compile Kernel
+      - name: Compile Kernel & DTB
         run: |
           cd source
           export ARCH=arm64
@@ -37,20 +37,28 @@ jobs:
           export LLVM_IAS=1
 
           make m14x_defconfig
-
-          # Disable BTF debugging and strict module requirements
-          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/' .config
-          sed -i 's/CONFIG_MODVERSIONS=y/CONFIG_MODVERSIONS=n/' .config
-          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/' .config
-          sed -i 's/CONFIG_MODULE_SIG_ALL=y/CONFIG_MODULE_SIG_ALL=n/' .config
-          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/CONFIG_MODULE_SIG_FORCE=n/' .config
+          
+          # Enable RTL8192EU as built-in (=y)
+          echo "CONFIG_RTL8192EU=y" >> .config
+          echo "CONFIG_WIRELESS=y" >> .config
+          echo "CONFIG_CFG80211=y" >> .config
+          echo "CONFIG_MAC80211=y" >> .config
+          
+          # CRITICAL: Keep MODVERSIONS enabled so Samsung vendor modules load
+          sed -i 's/CONFIG_MODVERSIONS=n/CONFIG_MODVERSIONS=y/' .config
           sed -i 's/CONFIG_TRIM_UNUSED_KSYMS=y/CONFIG_TRIM_UNUSED_KSYMS=n/' .config
-          sed -i 's/^CONFIG_UNUSED_KSYMS_WHITELIST=.*/CONFIG_UNUSED_KSYMS_WHITELIST=""/' .config
 
-          make -j$(nproc) Image
+          # Build Image and Device Tree Blobs (dtb)
+          make -j$(nproc) Image dtbs
+
+      - name: Package Artifacts
+        run: |
+          mkdir -p output
+          cp source/arch/arm64/boot/Image output/Image
+          find source/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} output/ \; 2>/dev/null || true
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-kernel
-          path: source/arch/arm64/boot/Image
+          name: fixed-kernel
+          path: output/
