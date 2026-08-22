@@ -17,10 +17,10 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
           cd source/drivers/net/wireless
-          # Use morrownr branch updated specifically for Linux 5.10/5.15+
-          git clone --depth=1 https://github.com/morrownr/8192eu-linux-gnu.git rtl8192eu
+          # Cloning verified modern RTL8192EU driver repository for 5.10/5.15+ kernels
+          git clone --depth=1 https://github.com/Mange/rtl8192eu-linux-driver.git rtl8192eu
           echo "obj-m += rtl8192eu/" >> Makefile
-          sed -i 's/---help---/help/g' rtl8192eu/Kconfig
+          sed -i 's/---help---/help/g' rtl8192eu/Kconfig || true
           sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
 
       - name: Build Standalone Module
