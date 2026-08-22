@@ -1,0 +1,53 @@
+name: Build Samsung RTL8192EU Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          sudo apt update -qq
+          sudo apt install -y -qq build-essential bc bison flex libssl-dev git libelf-dev clang lld llvm gcc-aarch64-linux-gnu
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=1 https://github.com/devhunter1/android_kernel_samsung_s5e8535.git source
+
+      - name: Inject RTL8192EU Driver
+        run: |
+          cd source/drivers/net/wireless
+          git clone https://github.com/clnhub/rtl8192eu-linux.git rtl8192eu
+          echo "obj-y += rtl8192eu/" >> Makefile
+          sed -i 's/---help---/help/g' rtl8192eu/Kconfig
+          sed -i '/endif/i source "drivers/net/wireless/rtl8192eu/Kconfig"' Kconfig
+
+      - name: Compile Kernel
+        run: |
+          cd source
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export LLVM_IAS=1
+
+          make m14x_defconfig
+          sed -i 's/CONFIG_MODVERSIONS=y/CONFIG_MODVERSIONS=n/' .config
+          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/' .config
+          sed -i 's/CONFIG_MODULE_SIG_ALL=y/CONFIG_MODULE_SIG_ALL=n/' .config
+          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/CONFIG_MODULE_SIG_FORCE=n/' .config
+          sed -i 's/CONFIG_TRIM_UNUSED_KSYMS=y/CONFIG_TRIM_UNUSED_KSYMS=n/' .config
+          sed -i 's/^CONFIG_UNUSED_KSYMS_WHITELIST=.*/CONFIG_UNUSED_KSYMS_WHITELIST=""/' .config
+
+          make -j$(nproc) Image
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-kernel
+          path: source/arch/arm64/boot/Image
